@@ -1,174 +1,214 @@
 import type { CsvRow } from "../../types/csv";
+import type { ChartData, ChartOptions } from "chart.js";
 import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Tooltip,
-    Legend,
-    Title,
-  } from "chart.js";
-  
-  import {
-    Bar,
-    Line,
-    Pie,
-    Doughnut,
-  } from "react-chartjs-2";
-  
-  ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Tooltip,
-    Legend,
-    Title
-  );
-  
-  type Props = {
-    data: CsvRow[];
-    chartType: string;
-    xKey: string;
-    yKey: string;
-  };
-  
-  const ChartGenerator = ({
-    data,
-    chartType,
-    xKey,
-    yKey
-  }: Props) => {
-    if (!data || data.length === 0) return null;
-    
-  
-    const labels = data.map(
-      (item) => String(item[xKey])
-    );
-  
-    const values = data.map((item) => {
-        const val = Number(item[yKey]);
-        return isNaN(val) ? 0 : val;
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LineElement,
+  BarController,
+  LineController,
+  PieController,
+  DoughnutController,
+  RadarController,
+  PolarAreaController,
+  ScatterController,
+  BubbleController,
+  Tooltip,
+  Legend,
+  Title,
+} from "chart.js";
+
+import BarChart from "./BarChart";
+import LineChart from "./LineChart";
+import PieChart from "./PieChart";
+import RadarChart from "./RadarChart";
+import PolarAreaChart from "./PolarAreaChart";
+import ScatterChart from "./ScatterChart";
+import BubbleChart from "./BubbleChart";
+
+import {
+  buildCategoricalChartData,
+  buildProportionChartData,
+  buildScatterChartData,
+  buildBubbleChartData,
+  buildChartOptions,
+  CHART_FAMILY,
+} from "../../utils/ChartHelper";
+import type { SupportedChartType } from "../../utils/ChartHelper";
+
+// Registering elements (BarElement, ArcElement...) without their matching
+// controllers (BarController, PieController...) makes Chart.js throw
+// `"<type>" is not a registered controller` the moment it tries to render —
+// every chart type used here needs both registered.
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LineElement,
+  BarController,
+  LineController,
+  PieController,
+  DoughnutController,
+  RadarController,
+  PolarAreaController,
+  ScatterController,
+  BubbleController,
+  Tooltip,
+  Legend,
+  Title
+);
+
+type Props = {
+  data: CsvRow[];
+  chartType: SupportedChartType;
+  xKey: string;
+  yKeys: string[];
+  labelKey: string;
+  valueKey: string;
+  bubbleYKey: string;
+  bubbleRKey: string;
+};
+
+const ChartGenerator = ({
+  data,
+  chartType,
+  xKey,
+  yKeys,
+  labelKey,
+  valueKey,
+  bubbleYKey,
+  bubbleRKey,
+}: Props) => {
+  if (!data || data.length === 0) return null;
+
+  const family = CHART_FAMILY[chartType];
+
+  const renderChart = () => {
+    if (family === "categorical") {
+      if (yKeys.length === 0) {
+        return (
+          <p className="text-gray-500">
+            Select at least one numeric column to plot.
+          </p>
+        );
+      }
+
+      const type = chartType as "bar" | "line" | "radar";
+      const chartData = buildCategoricalChartData(data, xKey, yKeys, type);
+      const options = buildChartOptions({
+        title: `${yKeys.join(", ")} by ${xKey}`,
+      });
+
+      if (type === "bar") {
+        return (
+          <BarChart
+            data={chartData as ChartData<"bar">}
+            options={options as ChartOptions<"bar">}
+          />
+        );
+      }
+      if (type === "line") {
+        return (
+          <LineChart
+            data={chartData as ChartData<"line">}
+            options={options as ChartOptions<"line">}
+          />
+        );
+      }
+      return (
+        <RadarChart
+          data={chartData as ChartData<"radar">}
+          options={options as ChartOptions<"radar">}
+        />
+      );
+    }
+
+    if (family === "proportion") {
+      const chartData = buildProportionChartData(data, labelKey, valueKey);
+      const options = buildChartOptions({
+        title: `${valueKey} by ${labelKey}`,
+      });
+
+      if (chartType === "pie") {
+        return (
+          <PieChart
+            data={chartData as ChartData<"pie">}
+            options={options as ChartOptions<"pie">}
+          />
+        );
+      }
+      if (chartType === "doughnut") {
+        return (
+          <PieChart
+            data={chartData as ChartData<"pie">}
+            options={options as ChartOptions<"pie">}
+            doughnut
+          />
+        );
+      }
+      return (
+        <PolarAreaChart
+          data={chartData as ChartData<"polarArea">}
+          options={options as ChartOptions<"polarArea">}
+        />
+      );
+    }
+
+    if (family === "xy") {
+      if (yKeys.length === 0) {
+        return (
+          <p className="text-gray-500">
+            Select at least one numeric Y column to plot against X.
+          </p>
+        );
+      }
+
+      const chartData = buildScatterChartData(data, xKey, yKeys);
+      const options = buildChartOptions({
+        title: `${yKeys.join(", ")} vs ${xKey}`,
+        xLabel: xKey,
+        yLabel: yKeys.join(", "),
+        linearAxes: true,
+      });
+
+      return (
+        <ScatterChart
+          data={chartData}
+          options={options as ChartOptions<"scatter">}
+        />
+      );
+    }
+
+    // bubble
+    const chartData = buildBubbleChartData(data, xKey, bubbleYKey, bubbleRKey);
+    const options = buildChartOptions({
+      title: `${bubbleYKey} vs ${xKey} (size: ${bubbleRKey})`,
+      xLabel: xKey,
+      yLabel: bubbleYKey,
+      linearAxes: true,
     });
-  
-    const chartData = {
-      labels,
-      datasets: [
-        {
-          label: yKey,
-          data: values,
-  
-          backgroundColor: [
-            "#3B82F6",
-            "#10B981",
-            "#F59E0B",
-            "#EF4444",
-            "#8B5CF6",
-            "#06B6D4",
-            "#EC4899",
-            "#84CC16",
-          ],
-  
-          borderColor: [
-            "#2563EB",
-            "#059669",
-            "#D97706",
-            "#DC2626",
-            "#7C3AED",
-            "#0891B2",
-            "#DB2777",
-            "#65A30D",
-          ],
-  
-          borderWidth: 2,
-  
-          hoverBackgroundColor: [
-            "#60A5FA",
-            "#34D399",
-            "#FBBF24",
-            "#F87171",
-            "#A78BFA",
-            "#22D3EE",
-            "#F472B6",
-            "#A3E635",
-          ],
-  
-          hoverBorderWidth: 4,
-  
-          tension: 0.4,
-  
-          fill: chartType === "line",
-        },
-      ],
-    };
-  
-    const options = {
-      responsive: true,
-  
-      plugins: {
-        legend: {
-          position: "top" as const,
-        },
-  
-        title: {
-          display: true,
-          text:  `Smart Data Visualization: ${yKey} vs ${xKey}`,
-          font: {
-            size: 22,
-          },
-        },
-      },
-  
-      animation: {
-        duration: 2000,
-      },
-    };
-  
+
     return (
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-  
-        <h2 className="text-2xl font-bold mb-6">
-          Generated Chart
-        </h2>
-  
-        {chartType === "bar" && (
-          <Bar
-            data={chartData}
-            options={options}
-          />
-        )}
-  
-        {chartType === "line" && (
-          <Line
-            data={chartData}
-            options={options}
-          />
-        )}
-  
-        {chartType === "pie" && (
-          <Pie
-            data={chartData}
-            options={options}
-          />
-        )}
-  
-        {chartType === "doughnut" && (
-          <Doughnut
-            data={chartData}
-            options={{
-              ...options,
-              cutout: "65%",
-            }}
-          />
-        )}
-  
-      </div>
+      <BubbleChart
+        data={chartData}
+        options={options as ChartOptions<"bubble">}
+      />
     );
   };
-  
-  export default ChartGenerator;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-xl p-8">
+      <h2 className="text-2xl font-bold mb-6">Generated Chart</h2>
+      <div className="h-[500px]">{renderChart()}</div>
+    </div>
+  );
+};
+
+export default ChartGenerator;

@@ -1,0 +1,1649 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index bdf824a..c4d41e6 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,24 +1,13 @@
+-import {  Routes, Route } from "react-router-dom";
+ import Navbar from "./components/layout/Navbar";
+-import Dashboard from "./pages/Dashboard";
+-import FunctionPlotter from "./pages/FunctionPlotter";
+-import DataVisualizer from "./pages/DataVisualizer";
++import AppRoutes from "./routes/AppRoutes";
+ 
+ const App = () => {
+   return (
+     <>
+       <Navbar />
+-      <Routes>
+-        <Route path="/" element={<Dashboard />} />
+-        <Route
+-          path="/function-plotter"
+-          element={<FunctionPlotter />}/>
+-        <Route
+-          path="/data-visualizer"
+-          element={<DataVisualizer />}/>
+-      </Routes>
++      <AppRoutes />
+     </>
+   );
+ };
+ 
+-export default App;
+\ No newline at end of file
++export default App;
+diff --git a/src/components/analysis/StatsSummary.tsx b/src/components/analysis/StatsSummary.tsx
+new file mode 100644
+index 0000000..955e608
+--- /dev/null
++++ b/src/components/analysis/StatsSummary.tsx
+@@ -0,0 +1,55 @@
++import type { CsvRow } from "../../types/csv";
++import { computeColumnStats } from "../../utils/dataAnalysis";
++
++type Props = {
++  data: CsvRow[];
++  numericKeys: string[];
++};
++
++const formatNumber = (n: number) =>
++  Number.isInteger(n) ? n.toLocaleString() : n.toFixed(2);
++
++const StatsSummary = ({ data, numericKeys }: Props) => {
++  if (numericKeys.length === 0) return null;
++
++  const stats = computeColumnStats(data, numericKeys);
++
++  return (
++    <div className="bg-white rounded-xl shadow-md p-6">
++      <h2 className="text-xl font-semibold mb-1">Summary Statistics</h2>
++      <p className="text-sm text-gray-500 mb-4">
++        Computed across all {data.length.toLocaleString()} rows, regardless of
++        what's currently charted.
++      </p>
++
++      <div className="overflow-x-auto">
++        <table className="w-full border text-sm">
++          <thead>
++            <tr>
++              <th className="border bg-slate-100 p-2 text-left">Column</th>
++              <th className="border bg-slate-100 p-2 text-right">Count</th>
++              <th className="border bg-slate-100 p-2 text-right">Min</th>
++              <th className="border bg-slate-100 p-2 text-right">Max</th>
++              <th className="border bg-slate-100 p-2 text-right">Mean</th>
++              <th className="border bg-slate-100 p-2 text-right">Sum</th>
++            </tr>
++          </thead>
++          <tbody>
++            {stats.map((s) => (
++              <tr key={s.column}>
++                <td className="border p-2 font-medium">{s.column}</td>
++                <td className="border p-2 text-right">{s.count.toLocaleString()}</td>
++                <td className="border p-2 text-right">{formatNumber(s.min)}</td>
++                <td className="border p-2 text-right">{formatNumber(s.max)}</td>
++                <td className="border p-2 text-right">{formatNumber(s.mean)}</td>
++                <td className="border p-2 text-right">{formatNumber(s.sum)}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      </div>
++    </div>
++  );
++};
++
++export default StatsSummary;
+diff --git a/src/components/charts/BarChart.tsx b/src/components/charts/BarChart.tsx
+index e69de29..680876a 100644
+--- a/src/components/charts/BarChart.tsx
++++ b/src/components/charts/BarChart.tsx
+@@ -0,0 +1,13 @@
++import { Bar } from "react-chartjs-2";
++import type { ChartData, ChartOptions } from "chart.js";
++
++type Props = {
++  data: ChartData<"bar">;
++  options: ChartOptions<"bar">;
++};
++
++const BarChart = ({ data, options }: Props) => {
++  return <Bar data={data} options={options} />;
++};
++
++export default BarChart;
+diff --git a/src/components/charts/BubbleChart.tsx b/src/components/charts/BubbleChart.tsx
+new file mode 100644
+index 0000000..9fbdaa4
+--- /dev/null
++++ b/src/components/charts/BubbleChart.tsx
+@@ -0,0 +1,13 @@
++import { Bubble } from "react-chartjs-2";
++import type { ChartData, ChartOptions } from "chart.js";
++
++type Props = {
++  data: ChartData<"bubble">;
++  options: ChartOptions<"bubble">;
++};
++
++const BubbleChart = ({ data, options }: Props) => {
++  return <Bubble data={data} options={options} />;
++};
++
++export default BubbleChart;
+diff --git a/src/components/charts/ChartGenerator.tsx b/src/components/charts/ChartGenerator.tsx
+index 5904782..ca13cc3 100644
+--- a/src/components/charts/ChartGenerator.tsx
++++ b/src/components/charts/ChartGenerator.tsx
+@@ -1,174 +1,214 @@
+ import type { CsvRow } from "../../types/csv";
++import type { ChartData, ChartOptions } from "chart.js";
+ import {
+-    Chart as ChartJS,
+-    CategoryScale,
+-    LinearScale,
+-    BarElement,
+-    ArcElement,
+-    PointElement,
+-    LineElement,
+-    Tooltip,
+-    Legend,
+-    Title,
+-  } from "chart.js";
+-  
+-  import {
+-    Bar,
+-    Line,
+-    Pie,
+-    Doughnut,
+-  } from "react-chartjs-2";
+-  
+-  ChartJS.register(
+-    CategoryScale,
+-    LinearScale,
+-    BarElement,
+-    ArcElement,
+-    PointElement,
+-    LineElement,
+-    Tooltip,
+-    Legend,
+-    Title
+-  );
+-  
+-  type Props = {
+-    data: CsvRow[];
+-    chartType: string;
+-    xKey: string;
+-    yKey: string;
+-  };
+-  
+-  const ChartGenerator = ({
+-    data,
+-    chartType,
+-    xKey,
+-    yKey
+-  }: Props) => {
+-    if (!data || data.length === 0) return null;
+-    
+-  
+-    const labels = data.map(
+-      (item) => String(item[xKey])
+-    );
+-  
+-    const values = data.map((item) => {
+-        const val = Number(item[yKey]);
+-        return isNaN(val) ? 0 : val;
+-    });
+-  
+-    const chartData = {
+-      labels,
+-      datasets: [
+-        {
+-          label: yKey,
+-          data: values,
+-  
+-          backgroundColor: [
+-            "#3B82F6",
+-            "#10B981",
+-            "#F59E0B",
+-            "#EF4444",
+-            "#8B5CF6",
+-            "#06B6D4",
+-            "#EC4899",
+-            "#84CC16",
+-          ],
+-  
+-          borderColor: [
+-            "#2563EB",
+-            "#059669",
+-            "#D97706",
+-            "#DC2626",
+-            "#7C3AED",
+-            "#0891B2",
+-            "#DB2777",
+-            "#65A30D",
+-          ],
+-  
+-          borderWidth: 2,
+-  
+-          hoverBackgroundColor: [
+-            "#60A5FA",
+-            "#34D399",
+-            "#FBBF24",
+-            "#F87171",
+-            "#A78BFA",
+-            "#22D3EE",
+-            "#F472B6",
+-            "#A3E635",
+-          ],
+-  
+-          hoverBorderWidth: 4,
+-  
+-          tension: 0.4,
+-  
+-          fill: chartType === "line",
+-        },
+-      ],
+-    };
+-  
+-    const options = {
+-      responsive: true,
+-  
+-      plugins: {
+-        legend: {
+-          position: "top" as const,
+-        },
+-  
+-        title: {
+-          display: true,
+-          text:  `Smart Data Visualization: ${yKey} vs ${xKey}`,
+-          font: {
+-            size: 22,
+-          },
+-        },
+-      },
+-  
+-      animation: {
+-        duration: 2000,
+-      },
+-    };
+-  
+-    return (
+-      <div className="bg-white rounded-2xl shadow-xl p-8">
+-  
+-        <h2 className="text-2xl font-bold mb-6">
+-          Generated Chart
+-        </h2>
+-  
+-        {chartType === "bar" && (
+-          <Bar
+-            data={chartData}
+-            options={options}
++  Chart as ChartJS,
++  CategoryScale,
++  LinearScale,
++  RadialLinearScale,
++  BarElement,
++  ArcElement,
++  PointElement,
++  LineElement,
++  BarController,
++  LineController,
++  PieController,
++  DoughnutController,
++  RadarController,
++  PolarAreaController,
++  ScatterController,
++  BubbleController,
++  Tooltip,
++  Legend,
++  Title,
++} from "chart.js";
++
++import BarChart from "./BarChart";
++import LineChart from "./LineChart";
++import PieChart from "./PieChart";
++import RadarChart from "./RadarChart";
++import PolarAreaChart from "./PolarAreaChart";
++import ScatterChart from "./ScatterChart";
++import BubbleChart from "./BubbleChart";
++
++import {
++  buildCategoricalChartData,
++  buildProportionChartData,
++  buildScatterChartData,
++  buildBubbleChartData,
++  buildChartOptions,
++  CHART_FAMILY,
++} from "../../utils/ChartHelper";
++import type { SupportedChartType } from "../../utils/ChartHelper";
++
++// Registering elements (BarElement, ArcElement...) without their matching
++// controllers (BarController, PieController...) makes Chart.js throw
++// `"<type>" is not a registered controller` the moment it tries to render —
++// every chart type used here needs both registered.
++ChartJS.register(
++  CategoryScale,
++  LinearScale,
++  RadialLinearScale,
++  BarElement,
++  ArcElement,
++  PointElement,
++  LineElement,
++  BarController,
++  LineController,
++  PieController,
++  DoughnutController,
++  RadarController,
++  PolarAreaController,
++  ScatterController,
++  BubbleController,
++  Tooltip,
++  Legend,
++  Title
++);
++
++type Props = {
++  data: CsvRow[];
++  chartType: SupportedChartType;
++  xKey: string;
++  yKeys: string[];
++  labelKey: string;
++  valueKey: string;
++  bubbleYKey: string;
++  bubbleRKey: string;
++};
++
++const ChartGenerator = ({
++  data,
++  chartType,
++  xKey,
++  yKeys,
++  labelKey,
++  valueKey,
++  bubbleYKey,
++  bubbleRKey,
++}: Props) => {
++  if (!data || data.length === 0) return null;
++
++  const family = CHART_FAMILY[chartType];
++
++  const renderChart = () => {
++    if (family === "categorical") {
++      if (yKeys.length === 0) {
++        return (
++          <p className="text-gray-500">
++            Select at least one numeric column to plot.
++          </p>
++        );
++      }
++
++      const type = chartType as "bar" | "line" | "radar";
++      const chartData = buildCategoricalChartData(data, xKey, yKeys, type);
++      const options = buildChartOptions({
++        title: `${yKeys.join(", ")} by ${xKey}`,
++      });
++
++      if (type === "bar") {
++        return (
++          <BarChart
++            data={chartData as ChartData<"bar">}
++            options={options as ChartOptions<"bar">}
+           />
+-        )}
+-  
+-        {chartType === "line" && (
+-          <Line
+-            data={chartData}
+-            options={options}
++        );
++      }
++      if (type === "line") {
++        return (
++          <LineChart
++            data={chartData as ChartData<"line">}
++            options={options as ChartOptions<"line">}
+           />
+-        )}
+-  
+-        {chartType === "pie" && (
+-          <Pie
+-            data={chartData}
+-            options={options}
++        );
++      }
++      return (
++        <RadarChart
++          data={chartData as ChartData<"radar">}
++          options={options as ChartOptions<"radar">}
++        />
++      );
++    }
++
++    if (family === "proportion") {
++      const chartData = buildProportionChartData(data, labelKey, valueKey);
++      const options = buildChartOptions({
++        title: `${valueKey} by ${labelKey}`,
++      });
++
++      if (chartType === "pie") {
++        return (
++          <PieChart
++            data={chartData as ChartData<"pie">}
++            options={options as ChartOptions<"pie">}
+           />
+-        )}
+-  
+-        {chartType === "doughnut" && (
+-          <Doughnut
+-            data={chartData}
+-            options={{
+-              ...options,
+-              cutout: "65%",
+-            }}
++        );
++      }
++      if (chartType === "doughnut") {
++        return (
++          <PieChart
++            data={chartData as ChartData<"pie">}
++            options={options as ChartOptions<"pie">}
++            doughnut
+           />
+-        )}
+-  
+-      </div>
++        );
++      }
++      return (
++        <PolarAreaChart
++          data={chartData as ChartData<"polarArea">}
++          options={options as ChartOptions<"polarArea">}
++        />
++      );
++    }
++
++    if (family === "xy") {
++      if (yKeys.length === 0) {
++        return (
++          <p className="text-gray-500">
++            Select at least one numeric Y column to plot against X.
++          </p>
++        );
++      }
++
++      const chartData = buildScatterChartData(data, xKey, yKeys);
++      const options = buildChartOptions({
++        title: `${yKeys.join(", ")} vs ${xKey}`,
++        xLabel: xKey,
++        yLabel: yKeys.join(", "),
++        linearAxes: true,
++      });
++
++      return (
++        <ScatterChart
++          data={chartData}
++          options={options as ChartOptions<"scatter">}
++        />
++      );
++    }
++
++    // bubble
++    const chartData = buildBubbleChartData(data, xKey, bubbleYKey, bubbleRKey);
++    const options = buildChartOptions({
++      title: `${bubbleYKey} vs ${xKey} (size: ${bubbleRKey})`,
++      xLabel: xKey,
++      yLabel: bubbleYKey,
++      linearAxes: true,
++    });
++
++    return (
++      <BubbleChart
++        data={chartData}
++        options={options as ChartOptions<"bubble">}
++      />
+     );
+   };
+-  
+-  export default ChartGenerator;
+\ No newline at end of file
++
++  return (
++    <div className="bg-white rounded-2xl shadow-xl p-8">
++      <h2 className="text-2xl font-bold mb-6">Generated Chart</h2>
++      <div className="h-[500px]">{renderChart()}</div>
++    </div>
++  );
++};
++
++export default ChartGenerator;
+diff --git a/src/components/charts/FunctionChart.tsx b/src/components/charts/FunctionChart.tsx
+index 6db1906..ec643c4 100644
+--- a/src/components/charts/FunctionChart.tsx
++++ b/src/components/charts/FunctionChart.tsx
+@@ -8,96 +8,190 @@ import {
+     LinearScale,
+     PointElement,
+     LineElement,
++    LineController,
+     Title,
+     Tooltip,
+     Legend,
+ } from 'chart.js';
+ 
+-
+ ChartJS.register(
+     CategoryScale,
+     LinearScale,
+     PointElement,
+     LineElement,
++    LineController,
+     Title,
+     Tooltip,
+     Legend
+ );
+ 
++const LINE_COLORS = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6"];
++
++type PlottedFunction = {
++    id: number;
++    expression: string;
++};
++
++let nextId = 2;
++
+ const FunctionChart = () => {
+-    const [expression, setExpression] = useState('x^2');
++    const [functions, setFunctions] = useState<PlottedFunction[]>([
++        { id: 1, expression: 'x^2' },
++    ]);
++    const [rangeMin, setRangeMin] = useState(-10);
++    const [rangeMax, setRangeMax] = useState(10);
++    const [step, setStep] = useState(0.25);
++
++    const updateExpression = (id: number, expression: string) => {
++        setFunctions((prev) =>
++            prev.map((fn) => (fn.id === id ? { ...fn, expression } : fn))
++        );
++    };
++
++    const addFunction = () => {
++        setFunctions((prev) => [...prev, { id: nextId++, expression: 'x' }]);
++    };
++
++    const removeFunction = (id: number) => {
++        setFunctions((prev) => prev.filter((fn) => fn.id !== id));
++    };
+ 
+     const generateChartData = () => {
+         const labels: number[] = [];
+-        const values: number[] = [];
+ 
+-        for (let x = -10; x <= 10; x++) {
+-            labels.push(x);
+-            try{
+-                const y = evaluate(expression, { x });
++        const safeStep = step > 0 ? step : 0.25;
++        for (let x = rangeMin; x <= rangeMax; x += safeStep) {
++            labels.push(Math.round(x * 1000) / 1000);
++        }
+ 
+-                if (typeof y == "number" && isFinite(y)) {
+-                    values.push(y);
+-                }else {
+-                    values.push(NaN);
++        const datasets = functions.map((fn, index) => {
++            const values = labels.map((x) => {
++                try {
++                    const y = evaluate(fn.expression, { x });
++                    return typeof y === 'number' && isFinite(y) ? y : NaN;
++                } catch {
++                    return NaN;
+                 }
+-            } catch {
+-                values.push(NaN);
+-            }
+-        }
++            });
+ 
+-        return {
+-            labels,
+-            datasets: [
+-                {
+-                    label: `y = ${expression}`,
+-                    data: values,
+-                    borderWidth: 3,
+-                        tension: 0.4
+-                },
+-            ],
+-        };
++            return {
++                label: `y = ${fn.expression || '?'}`,
++                data: values,
++                borderColor: LINE_COLORS[index % LINE_COLORS.length],
++                backgroundColor: LINE_COLORS[index % LINE_COLORS.length],
++                borderWidth: 3,
++                tension: 0.4,
++                pointRadius: 0,
++            };
++        });
++
++        return { labels, datasets };
+     };
+-    
+-    const options ={
++
++    const options = {
+         responsive: true,
+         maintainAspectRatio: false,
+-        plugins : {
++        plugins: {
+             legend: {
+                 display: true,
+             },
+-            title : {
++            title: {
+                 display: true,
+-                text: "Function Plot",
+-            },  
++                text: 'Function Plot',
++            },
++        },
++        scales: {
++            x: {
++                ticks: {
++                    maxTicksLimit: 20,
++                },
++            },
+         },
+     };
+ 
+     return (
+-        <div className='max-w-5xl max-auto p-6'>
++        <div className='max-w-5xl mx-auto p-6'>
+             <div className='bg-white rounded-xl shadow-lg p-6'>
+                 <h2 className='text-2xl font-bold mb-4'>
+                     Mathematical Function Plotter
+                 </h2>
+ 
+-                <input 
+-                  type='text'
+-                  value={expression}
+-                  onChange={(e) => setExpression(e.target.value)}
+-                  placeholder='Enter a function e.g x^2'
+-                  className='w-full border rounded-lg p-3 mb-6'
+-                />
++                <div className='space-y-3 mb-4'>
++                    {functions.map((fn) => (
++                        <div key={fn.id} className='flex gap-2 items-center'>
++                            <input
++                                type='text'
++                                value={fn.expression}
++                                onChange={(e) => updateExpression(fn.id, e.target.value)}
++                                placeholder='Enter a function e.g x^2'
++                                className='w-full border rounded-lg p-3'
++                            />
++                            {functions.length > 1 && (
++                                <button
++                                    type='button'
++                                    onClick={() => removeFunction(fn.id)}
++                                    className='shrink-0 px-3 py-2 rounded-lg border text-red-600 hover:bg-red-50'
++                                    aria-label='Remove function'
++                                >
++                                    ✕
++                                </button>
++                            )}
++                        </div>
++                    ))}
++
++                    <button
++                        type='button'
++                        onClick={addFunction}
++                        className='text-blue-600 hover:underline text-sm font-medium'
++                    >
++                        + Add another function
++                    </button>
++                </div>
++
++                <div className='grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6'>
++                    <label className='flex flex-col text-sm text-gray-600'>
++                        X min
++                        <input
++                            type='number'
++                            value={rangeMin}
++                            onChange={(e) => setRangeMin(Number(e.target.value))}
++                            className='border rounded-lg p-2 mt-1'
++                        />
++                    </label>
++
++                    <label className='flex flex-col text-sm text-gray-600'>
++                        X max
++                        <input
++                            type='number'
++                            value={rangeMax}
++                            onChange={(e) => setRangeMax(Number(e.target.value))}
++                            className='border rounded-lg p-2 mt-1'
++                        />
++                    </label>
++
++                    <label className='flex flex-col text-sm text-gray-600'>
++                        Step (resolution)
++                        <input
++                            type='number'
++                            min={0.01}
++                            step={0.05}
++                            value={step}
++                            onChange={(e) => setStep(Number(e.target.value))}
++                            className='border rounded-lg p-2 mt-1'
++                        />
++                    </label>
++                </div>
+ 
+                 <div className='h-[500px]'>
+-                    <Line 
+-                      data={generateChartData()}
+-                      options={options}
++                    <Line
++                        data={generateChartData()}
++                        options={options}
+                     />
+                 </div>
+ 
+                 <div className='mt-6'>
+                     <h3 className='font-semibold mb-2'>
+-                        Sample Functions 
++                        Sample Functions
+                     </h3>
+ 
+                     <ul className='space-y-1 text-gray-600'>
+@@ -116,4 +210,4 @@ const FunctionChart = () => {
+     );
+ };
+ 
+-export default FunctionChart;
+\ No newline at end of file
++export default FunctionChart;
+diff --git a/src/components/charts/LineChart.tsx b/src/components/charts/LineChart.tsx
+index e69de29..7988681 100644
+--- a/src/components/charts/LineChart.tsx
++++ b/src/components/charts/LineChart.tsx
+@@ -0,0 +1,13 @@
++import { Line } from "react-chartjs-2";
++import type { ChartData, ChartOptions } from "chart.js";
++
++type Props = {
++  data: ChartData<"line">;
++  options: ChartOptions<"line">;
++};
++
++const LineChart = ({ data, options }: Props) => {
++  return <Line data={data} options={options} />;
++};
++
++export default LineChart;
+diff --git a/src/components/charts/PieChart.tsx b/src/components/charts/PieChart.tsx
+index e69de29..e360529 100644
+--- a/src/components/charts/PieChart.tsx
++++ b/src/components/charts/PieChart.tsx
+@@ -0,0 +1,23 @@
++import { Pie, Doughnut } from "react-chartjs-2";
++import type { ChartData, ChartOptions } from "chart.js";
++
++type Props = {
++  data: ChartData<"pie">;
++  options: ChartOptions<"pie">;
++  doughnut?: boolean;
++};
++
++const PieChart = ({ data, options, doughnut = false }: Props) => {
++  if (doughnut) {
++    return (
++      <Doughnut
++        data={data as unknown as ChartData<"doughnut">}
++        options={{ ...options, cutout: "65%" } as ChartOptions<"doughnut">}
++      />
++    );
++  }
++
++  return <Pie data={data} options={options} />;
++};
++
++export default PieChart;
+diff --git a/src/components/charts/PolarAreaChart.tsx b/src/components/charts/PolarAreaChart.tsx
+new file mode 100644
+index 0000000..fff89c9
+--- /dev/null
++++ b/src/components/charts/PolarAreaChart.tsx
+@@ -0,0 +1,13 @@
++import { PolarArea } from "react-chartjs-2";
++import type { ChartData, ChartOptions } from "chart.js";
++
++type Props = {
++  data: ChartData<"polarArea">;
++  options: ChartOptions<"polarArea">;
++};
++
++const PolarAreaChart = ({ data, options }: Props) => {
++  return <PolarArea data={data} options={options} />;
++};
++
++export default PolarAreaChart;
+diff --git a/src/components/charts/RadarChart.tsx b/src/components/charts/RadarChart.tsx
+new file mode 100644
+index 0000000..e321ce5
+--- /dev/null
++++ b/src/components/charts/RadarChart.tsx
+@@ -0,0 +1,13 @@
++import { Radar } from "react-chartjs-2";
++import type { ChartData, ChartOptions } from "chart.js";
++
++type Props = {
++  data: ChartData<"radar">;
++  options: ChartOptions<"radar">;
++};
++
++const RadarChart = ({ data, options }: Props) => {
++  return <Radar data={data} options={options} />;
++};
++
++export default RadarChart;
+diff --git a/src/components/charts/ScatterChart.tsx b/src/components/charts/ScatterChart.tsx
+new file mode 100644
+index 0000000..3d4b484
+--- /dev/null
++++ b/src/components/charts/ScatterChart.tsx
+@@ -0,0 +1,13 @@
++import { Scatter } from "react-chartjs-2";
++import type { ChartData, ChartOptions } from "chart.js";
++
++type Props = {
++  data: ChartData<"scatter">;
++  options: ChartOptions<"scatter">;
++};
++
++const ScatterChart = ({ data, options }: Props) => {
++  return <Scatter data={data} options={options} />;
++};
++
++export default ScatterChart;
+diff --git a/src/components/uploads/FileUploader.tsx b/src/components/uploads/FileUploader.tsx
+index 337bd40..948496b 100644
+--- a/src/components/uploads/FileUploader.tsx
++++ b/src/components/uploads/FileUploader.tsx
+@@ -1,117 +1,327 @@
+-import { useState } from "react";
+-import Papa from "papaparse";
++import { useMemo, useState } from "react";
+ 
+ import DataPreview from "./DataPreview";
+ import ChartGenerator from "../charts/ChartGenerator";
++import StatsSummary from "../analysis/StatsSummary";
+ import type { CsvRow } from "../../types/csv";
++import { parseDataFile } from "../../utils/csvParser";
++import {
++  detectColumnTypes,
++  getNumericColumns,
++  getTextColumns,
++} from "../../utils/dataAnalysis";
++import { CHART_FAMILY } from "../../utils/ChartHelper";
++import type { SupportedChartType } from "../../utils/ChartHelper";
++
++const CHART_TYPE_OPTIONS: { value: SupportedChartType; label: string }[] = [
++  { value: "bar", label: "Bar Chart" },
++  { value: "line", label: "Line Chart" },
++  { value: "radar", label: "Radar Chart" },
++  { value: "pie", label: "Pie Chart" },
++  { value: "doughnut", label: "Doughnut Chart" },
++  { value: "polarArea", label: "Polar Area Chart" },
++  { value: "scatter", label: "Scatter Plot" },
++  { value: "bubble", label: "Bubble Chart" },
++];
++
++const DEFAULT_ROW_LIMIT = 300;
+ 
+ const FileUploader = () => {
+   const [fileName, setFileName] = useState("");
+   const [data, setData] = useState<CsvRow[]>([]);
+-  const [chartType, setChartType] = useState("bar");
++  const [error, setError] = useState("");
+ 
++  const [chartType, setChartType] = useState<SupportedChartType>("bar");
++
++  // categorical (bar/line/radar) + scatter Y
+   const [xKey, setXKey] = useState("");
+-  const [yKey, setYKey] = useState("");
++  const [yKeys, setYKeys] = useState<string[]>([]);
++
++  // pie / doughnut / polarArea
++  const [labelKey, setLabelKey] = useState("");
++  const [valueKey, setValueKey] = useState("");
++
++  // bubble
++  const [bubbleYKey, setBubbleYKey] = useState("");
++  const [bubbleRKey, setBubbleRKey] = useState("");
++
++  // performance control for large datasets
++  const [rowLimit, setRowLimit] = useState(DEFAULT_ROW_LIMIT);
++
++  const columnTypes = useMemo(() => detectColumnTypes(data), [data]);
++  const numericKeys = useMemo(() => getNumericColumns(columnTypes), [columnTypes]);
++  const allKeys = useMemo(() => Object.keys(columnTypes), [columnTypes]);
++
++  const family = CHART_FAMILY[chartType];
+ 
+-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
++  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+     const file = event.target.files?.[0];
+     if (!file) return;
+ 
++    setError("");
+     setFileName(file.name);
+ 
+-    Papa.parse<CsvRow>(file, {
+-      header: true,
+-      skipEmptyLines: true,
+-      complete: (results) => {
+-        const parsed = results.data;
+-        setData(parsed);
+-
+-        const keys = Object.keys(parsed[0] || {});
+-        setXKey(keys[0]);
+-        setYKey(keys[1]);
+-      },
++    try {
++      const parsed = await parseDataFile(file);
++      setData(parsed);
++      setRowLimit(Math.min(parsed.length, DEFAULT_ROW_LIMIT) || DEFAULT_ROW_LIMIT);
++
++      const types = detectColumnTypes(parsed);
++      const numeric = getNumericColumns(types);
++      const text = getTextColumns(types);
++      const keys = Object.keys(types);
++
++      const defaultX = text[0] || keys[0] || "";
++      const defaultY = numeric[0] ? [numeric[0]] : keys[1] ? [keys[1]] : keys[0] ? [keys[0]] : [];
++
++      setXKey(defaultX);
++      setYKeys(defaultY);
++      setLabelKey(defaultX);
++      setValueKey(numeric[0] || keys[1] || keys[0] || "");
++      setBubbleYKey(numeric[1] || numeric[0] || keys[0] || "");
++      setBubbleRKey(numeric[2] || numeric[0] || keys[0] || "");
++    } catch (err) {
++      setData([]);
++      setError(err instanceof Error ? err.message : "Failed to parse the file.");
++    }
++  };
++
++  const toggleYKey = (key: string) => {
++    setYKeys((prev) => {
++      if (prev.includes(key)) {
++        // keep at least one column selected
++        return prev.length > 1 ? prev.filter((k) => k !== key) : prev;
++      }
++      return [...prev, key];
+     });
+   };
+ 
++  const chartedData = useMemo(() => data.slice(0, rowLimit), [data, rowLimit]);
++
+   return (
+     <div className="space-y-8">
+-
+       {/* Upload */}
+       <div className="bg-white rounded-xl shadow-md p-8">
+-        <span className="text-2xl font-semibold mb-6">Upload Dataset</span>
+-
+-        <input
+-          type="file"
+-          accept=".csv"
+-          onChange={handleFileChange}
+-        />
+-
+-        {fileName && (
+-          <p className="mt-4 text-green-600 font-semibold">
+-            {fileName}
+-          </p>
++        <span className="text-2xl font-semibold mb-6 block">Upload Dataset</span>
++
++        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} />
++
++        {fileName && !error && (
++          <p className="mt-4 text-green-600 font-semibold">{fileName}</p>
+         )}
++
++        {error && <p className="mt-4 text-red-600 font-semibold">{error}</p>}
+       </div>
+ 
+-      {/* Data Preview */}
+       {data.length > 0 && (
+         <>
+           <DataPreview data={data} />
+ 
+-          {/* Column Selectors */}
+-          <div className="bg-white p-6 rounded-xl shadow-md space-y-4">
+-
+-            <h2 className="text-xl font-semibold">
+-              Choose Columns
+-            </h2>
+-
+-            <div className="flex gap-4">
+-              <select
+-                value={xKey}
+-                onChange={(e) => setXKey(e.target.value)}
+-                className="border p-2 rounded"
+-              >
+-                {Object.keys(data[0]).map((key) => (
+-                  <option key={key}>{key}</option>
+-                ))}
+-              </select>
+-
+-              <select
+-                value={yKey}
+-                onChange={(e) => setYKey(e.target.value)}
+-                className="border p-2 rounded"
+-              >
+-                {Object.keys(data[0]).map((key) => (
+-                  <option key={key}>{key}</option>
+-                ))}
+-              </select>
+-            </div>
+-          </div>
++          <StatsSummary data={data} numericKeys={numericKeys} />
+ 
+           {/* Chart Type */}
+           <div className="bg-white rounded-xl shadow-md p-6">
+-            <h2 className="text-xl font-semibold mb-4">
+-              Select Chart Type
+-            </h2>
++            <h2 className="text-xl font-semibold mb-4">Select Chart Type</h2>
+ 
+             <select
+               value={chartType}
+-              onChange={(e) => setChartType(e.target.value)}
++              onChange={(e) => setChartType(e.target.value as SupportedChartType)}
+               className="border rounded-lg p-3"
+             >
+-              <option value="bar">Bar Chart</option>
+-              <option value="line">Line Chart</option>
+-              <option value="pie">Pie Chart</option>
+-              <option value="doughnut">Doughnut Chart</option>
++              {CHART_TYPE_OPTIONS.map((opt) => (
++                <option key={opt.value} value={opt.value}>
++                  {opt.label}
++                </option>
++              ))}
+             </select>
+           </div>
+ 
++          {/* Column Selectors — shape depends on the chart family */}
++          <div className="bg-white p-6 rounded-xl shadow-md space-y-5">
++            <h2 className="text-xl font-semibold">Choose Columns</h2>
++
++            {(family === "categorical" || family === "xy") && (
++              <>
++                <div>
++                  <label className="block text-sm text-gray-600 mb-1">
++                    {family === "xy" ? "X (numeric)" : "X Axis"}
++                  </label>
++                  <select
++                    value={xKey}
++                    onChange={(e) => setXKey(e.target.value)}
++                    className="border p-2 rounded w-full sm:w-64"
++                  >
++                    {(family === "xy" ? numericKeys : allKeys).map((key) => (
++                      <option key={key} value={key}>
++                        {key}
++                      </option>
++                    ))}
++                  </select>
++                </div>
++
++                <div>
++                  <label className="block text-sm text-gray-600 mb-2">
++                    Y Series (select one or more numeric columns)
++                  </label>
++                  <div className="flex flex-wrap gap-2">
++                    {numericKeys.length === 0 && (
++                      <p className="text-sm text-amber-600">
++                        No numeric columns detected in this dataset.
++                      </p>
++                    )}
++                    {numericKeys.map((key) => (
++                      <button
++                        type="button"
++                        key={key}
++                        onClick={() => toggleYKey(key)}
++                        className={`px-3 py-1.5 rounded-full border text-sm transition ${
++                          yKeys.includes(key)
++                            ? "bg-blue-600 border-blue-600 text-white"
++                            : "bg-white border-gray-300 text-gray-700 hover:border-blue-400"
++                        }`}
++                      >
++                        {key}
++                      </button>
++                    ))}
++                  </div>
++                </div>
++              </>
++            )}
++
++            {family === "proportion" && (
++              <div className="flex flex-wrap gap-4">
++                <div>
++                  <label className="block text-sm text-gray-600 mb-1">
++                    Label column
++                  </label>
++                  <select
++                    value={labelKey}
++                    onChange={(e) => setLabelKey(e.target.value)}
++                    className="border p-2 rounded"
++                  >
++                    {allKeys.map((key) => (
++                      <option key={key} value={key}>
++                        {key}
++                      </option>
++                    ))}
++                  </select>
++                </div>
++
++                <div>
++                  <label className="block text-sm text-gray-600 mb-1">
++                    Value column (numeric)
++                  </label>
++                  <select
++                    value={valueKey}
++                    onChange={(e) => setValueKey(e.target.value)}
++                    className="border p-2 rounded"
++                  >
++                    {numericKeys.map((key) => (
++                      <option key={key} value={key}>
++                        {key}
++                      </option>
++                    ))}
++                  </select>
++                </div>
++              </div>
++            )}
++
++            {family === "bubble" && (
++              <div className="flex flex-wrap gap-4">
++                <div>
++                  <label className="block text-sm text-gray-600 mb-1">X (numeric)</label>
++                  <select
++                    value={xKey}
++                    onChange={(e) => setXKey(e.target.value)}
++                    className="border p-2 rounded"
++                  >
++                    {numericKeys.map((key) => (
++                      <option key={key} value={key}>
++                        {key}
++                      </option>
++                    ))}
++                  </select>
++                </div>
++
++                <div>
++                  <label className="block text-sm text-gray-600 mb-1">Y (numeric)</label>
++                  <select
++                    value={bubbleYKey}
++                    onChange={(e) => setBubbleYKey(e.target.value)}
++                    className="border p-2 rounded"
++                  >
++                    {numericKeys.map((key) => (
++                      <option key={key} value={key}>
++                        {key}
++                      </option>
++                    ))}
++                  </select>
++                </div>
++
++                <div>
++                  <label className="block text-sm text-gray-600 mb-1">
++                    Bubble size (numeric)
++                  </label>
++                  <select
++                    value={bubbleRKey}
++                    onChange={(e) => setBubbleRKey(e.target.value)}
++                    className="border p-2 rounded"
++                  >
++                    {numericKeys.map((key) => (
++                      <option key={key} value={key}>
++                        {key}
++                      </option>
++                    ))}
++                  </select>
++                </div>
++
++                {numericKeys.length < 3 && (
++                  <p className="text-sm text-amber-600 w-full">
++                    Bubble charts work best with at least 3 numeric columns
++                    (x, y, size). This dataset has {numericKeys.length}.
++                  </p>
++                )}
++              </div>
++            )}
++          </div>
++
++          {/* Row limit — keeps large datasets responsive */}
++          {data.length > 0 && (
++            <div className="bg-white rounded-xl shadow-md p-6">
++              <h2 className="text-xl font-semibold mb-2">Rows to Chart</h2>
++              <p className="text-sm text-gray-500 mb-3">
++                Dataset has {data.length.toLocaleString()} rows. Charting all of
++                them can get slow — adjust how many to plot (statistics above
++                always use the full dataset).
++              </p>
++              <input
++                type="number"
++                min={1}
++                max={data.length}
++                value={rowLimit}
++                onChange={(e) =>
++                  setRowLimit(
++                    Math.max(1, Math.min(data.length, Number(e.target.value) || 1))
++                  )
++                }
++                className="border rounded-lg p-2 w-40"
++              />
++              <span className="text-sm text-gray-500 ml-2">
++                of {data.length.toLocaleString()} rows
++              </span>
++            </div>
++          )}
++
+           {/* Chart */}
+           <ChartGenerator
+-            data={data}
++            data={chartedData}
+             chartType={chartType}
+             xKey={xKey}
+-            yKey={yKey}
++            yKeys={yKeys}
++            labelKey={labelKey}
++            valueKey={valueKey}
++            bubbleYKey={bubbleYKey}
++            bubbleRKey={bubbleRKey}
+           />
+         </>
+       )}
+@@ -119,4 +329,4 @@ const FileUploader = () => {
+   );
+ };
+ 
+-export default FileUploader;
+\ No newline at end of file
++export default FileUploader;
+diff --git a/src/utils/ChartHelper.ts b/src/utils/ChartHelper.ts
+index e69de29..0fc1a45 100644
+--- a/src/utils/ChartHelper.ts
++++ b/src/utils/ChartHelper.ts
+@@ -0,0 +1,202 @@
++import type { CsvRow } from "../types/csv";
++import type { ChartData, ChartOptions } from "chart.js";
++
++const PALETTE = [
++  { bg: "#3B82F6", border: "#2563EB" },
++  { bg: "#10B981", border: "#059669" },
++  { bg: "#F59E0B", border: "#D97706" },
++  { bg: "#EF4444", border: "#DC2626" },
++  { bg: "#8B5CF6", border: "#7C3AED" },
++  { bg: "#06B6D4", border: "#0891B2" },
++  { bg: "#EC4899", border: "#DB2777" },
++  { bg: "#84CC16", border: "#65A30D" },
++];
++
++const getColor = (index: number) => PALETTE[index % PALETTE.length];
++
++const getColorArray = (n: number) =>
++  Array.from({ length: n }, (_, i) => getColor(i).bg);
++
++const getBorderArray = (n: number) =>
++  Array.from({ length: n }, (_, i) => getColor(i).border);
++
++const toNumber = (value: unknown): number => {
++  const n = Number(value);
++  return isNaN(n) ? 0 : n;
++};
++
++export type SupportedChartType =
++  | "bar"
++  | "line"
++  | "pie"
++  | "doughnut"
++  | "radar"
++  | "polarArea"
++  | "scatter"
++  | "bubble";
++
++export const CHART_FAMILY: Record<
++  SupportedChartType,
++  "categorical" | "proportion" | "xy" | "bubble"
++> = {
++  bar: "categorical",
++  line: "categorical",
++  radar: "categorical",
++  pie: "proportion",
++  doughnut: "proportion",
++  polarArea: "proportion",
++  scatter: "xy",
++  bubble: "bubble",
++};
++
++/**
++ * Bar / Line / Radar: one shared category (x) axis, with one dataset per
++ * selected y column so a dataset with many numeric columns can be
++ * compared side by side instead of being limited to a single series.
++ */
++export const buildCategoricalChartData = (
++  data: CsvRow[],
++  xKey: string,
++  yKeys: string[],
++  chartType: "bar" | "line" | "radar"
++): ChartData<"bar" | "line" | "radar"> => {
++  const labels = data.map((row) => String(row[xKey]));
++
++  const datasets = yKeys.map((yKey, i) => {
++    const color = getColor(i);
++    return {
++      label: yKey,
++      data: data.map((row) => toNumber(row[yKey])),
++      backgroundColor: chartType === "radar" ? `${color.bg}33` : color.bg,
++      borderColor: color.border,
++      borderWidth: 2,
++      tension: 0.35,
++      pointRadius: chartType === "bar" ? 0 : 3,
++      fill: chartType === "radar",
++    };
++  });
++
++  return { labels, datasets } as ChartData<"bar" | "line" | "radar">;
++};
++
++/**
++ * Pie / Doughnut / PolarArea: one label column, one numeric value column,
++ * each row becomes a slice.
++ */
++export const buildProportionChartData = (
++  data: CsvRow[],
++  labelKey: string,
++  valueKey: string
++): ChartData<"pie" | "doughnut" | "polarArea"> => {
++  const labels = data.map((row) => String(row[labelKey]));
++  const values = data.map((row) => toNumber(row[valueKey]));
++
++  return {
++    labels,
++    datasets: [
++      {
++        label: valueKey,
++        data: values,
++        backgroundColor: getColorArray(data.length),
++        borderColor: getBorderArray(data.length),
++        borderWidth: 2,
++        hoverOffset: 8,
++      },
++    ],
++  } as ChartData<"pie" | "doughnut" | "polarArea">;
++};
++
++/**
++ * Scatter: numeric x column plotted against one or more numeric y columns,
++ * each rendered as its own series of {x, y} points (no connecting line).
++ */
++export const buildScatterChartData = (
++  data: CsvRow[],
++  xKey: string,
++  yKeys: string[]
++): ChartData<"scatter"> => {
++  const datasets = yKeys.map((yKey, i) => {
++    const color = getColor(i);
++    return {
++      label: yKey,
++      data: data.map((row) => ({
++        x: toNumber(row[xKey]),
++        y: toNumber(row[yKey]),
++      })),
++      backgroundColor: color.bg,
++      borderColor: color.border,
++      pointRadius: 4,
++      pointHoverRadius: 6,
++    };
++  });
++
++  return { datasets } as ChartData<"scatter">;
++};
++
++/**
++ * Bubble: three numeric columns at once (x, y, radius) — useful for
++ * datasets with more than two meaningful numeric dimensions.
++ */
++export const buildBubbleChartData = (
++  data: CsvRow[],
++  xKey: string,
++  yKey: string,
++  rKey: string
++): ChartData<"bubble"> => {
++  const rawR = data.map((row) => toNumber(row[rKey]));
++  const maxR = Math.max(...rawR, 1) || 1;
++  const color = getColor(0);
++
++  return {
++    datasets: [
++      {
++        label: `${yKey} vs ${xKey} (size: ${rKey})`,
++        data: data.map((row, i) => ({
++          x: toNumber(row[xKey]),
++          y: toNumber(row[yKey]),
++          r: 4 + (rawR[i] / maxR) * 20,
++        })),
++        backgroundColor: `${color.bg}99`,
++        borderColor: color.border,
++      },
++    ],
++  } as ChartData<"bubble">;
++};
++
++type ChartOptionsConfig = {
++  title: string;
++  xLabel?: string;
++  yLabel?: string;
++  linearAxes?: boolean;
++};
++
++export const buildChartOptions = ({
++  title,
++  xLabel,
++  yLabel,
++  linearAxes = false,
++}: ChartOptionsConfig): ChartOptions<
++  "bar" | "line" | "pie" | "doughnut" | "radar" | "polarArea" | "scatter" | "bubble"
++> => ({
++  responsive: true,
++  maintainAspectRatio: false,
++  plugins: {
++    legend: { position: "top" as const },
++    title: { display: true, text: title, font: { size: 20 } },
++  },
++  animation: { duration: 800 },
++  ...(linearAxes
++    ? {
++        scales: {
++          x: {
++            type: "linear" as const,
++            position: "bottom" as const,
++            title: { display: !!xLabel, text: xLabel },
++          },
++          y: {
++            title: { display: !!yLabel, text: yLabel },
++          },
++        },
++      }
++    : {}),
++});
+diff --git a/src/utils/csvParser.ts b/src/utils/csvParser.ts
+index e69de29..d95178e 100644
+--- a/src/utils/csvParser.ts
++++ b/src/utils/csvParser.ts
+@@ -0,0 +1,75 @@
++import Papa from "papaparse";
++import * as XLSX from "xlsx";
++import type { CsvRow } from "../types/csv";
++
++/**
++ * Parses a .csv file into an array of row objects keyed by header.
++ */
++export const parseCsvFile = (file: File): Promise<CsvRow[]> => {
++  return new Promise((resolve, reject) => {
++    Papa.parse<CsvRow>(file, {
++      header: true,
++      skipEmptyLines: true,
++      complete: (results) => resolve(results.data),
++      error: (error) => reject(error),
++    });
++  });
++};
++
++/**
++ * Parses a .xlsx / .xls file into an array of row objects keyed by header,
++ * using the first sheet in the workbook.
++ */
++export const parseExcelFile = (file: File): Promise<CsvRow[]> => {
++  return new Promise((resolve, reject) => {
++    const reader = new FileReader();
++
++    reader.onload = (event) => {
++      try {
++        const buffer = event.target?.result;
++        const workbook = XLSX.read(buffer, { type: "array" });
++        const firstSheetName = workbook.SheetNames[0];
++        const sheet = workbook.Sheets[firstSheetName];
++
++        // defval ensures every row has every column, even if a cell is blank
++        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
++          defval: "",
++        });
++
++        const normalized: CsvRow[] = rows.map((row) => {
++          const stringRow: CsvRow = {};
++          Object.keys(row).forEach((key) => {
++            stringRow[key] = String(row[key]);
++          });
++          return stringRow;
++        });
++
++        resolve(normalized);
++      } catch (error) {
++        reject(error);
++      }
++    };
++
++    reader.onerror = () => reject(reader.error);
++    reader.readAsArrayBuffer(file);
++  });
++};
++
++/**
++ * Detects file type by extension and routes to the correct parser.
++ */
++export const parseDataFile = (file: File): Promise<CsvRow[]> => {
++  const name = file.name.toLowerCase();
++
++  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
++    return parseExcelFile(file);
++  }
++
++  if (name.endsWith(".csv")) {
++    return parseCsvFile(file);
++  }
++
++  return Promise.reject(
++    new Error("Unsupported file type. Please upload a .csv, .xlsx, or .xls file.")
++  );
++};
+diff --git a/src/utils/dataAnalysis.ts b/src/utils/dataAnalysis.ts
+new file mode 100644
+index 0000000..3b08985
+--- /dev/null
++++ b/src/utils/dataAnalysis.ts
+@@ -0,0 +1,82 @@
++import type { CsvRow } from "../types/csv";
++
++export type ColumnType = "numeric" | "text";
++
++/**
++ * Detects whether each column is mostly numeric or mostly text by sampling
++ * up to the first 200 rows (cheap even on very large datasets).
++ */
++export const detectColumnTypes = (data: CsvRow[]): Record<string, ColumnType> => {
++  if (data.length === 0) return {};
++
++  const keys = Object.keys(data[0]);
++  const sample = data.slice(0, 200);
++  const types: Record<string, ColumnType> = {};
++
++  keys.forEach((key) => {
++    let nonEmpty = 0;
++    let numeric = 0;
++
++    sample.forEach((row) => {
++      const value = row[key];
++      if (value === undefined || value === "") return;
++      nonEmpty += 1;
++      if (!isNaN(Number(value))) numeric += 1;
++    });
++
++    types[key] = nonEmpty > 0 && numeric / nonEmpty >= 0.8 ? "numeric" : "text";
++  });
++
++  return types;
++};
++
++export const getNumericColumns = (types: Record<string, ColumnType>): string[] =>
++  Object.keys(types).filter((key) => types[key] === "numeric");
++
++export const getTextColumns = (types: Record<string, ColumnType>): string[] =>
++  Object.keys(types).filter((key) => types[key] === "text");
++
++export type ColumnStats = {
++  column: string;
++  count: number;
++  min: number;
++  max: number;
++  mean: number;
++  sum: number;
++};
++
++/**
++ * Computes summary statistics for the given numeric columns across the
++ * FULL dataset (not just whatever is currently charted). Uses reduce
++ * instead of Math.min/max(...spread) so it doesn't blow the call stack
++ * on very large datasets.
++ */
++export const computeColumnStats = (
++  data: CsvRow[],
++  numericKeys: string[]
++): ColumnStats[] => {
++  return numericKeys.map((key) => {
++    let count = 0;
++    let sum = 0;
++    let min = Infinity;
++    let max = -Infinity;
++
++    for (const row of data) {
++      const value = Number(row[key]);
++      if (isNaN(value)) continue;
++      count += 1;
++      sum += value;
++      if (value < min) min = value;
++      if (value > max) max = value;
++    }
++
++    return {
++      column: key,
++      count,
++      min: count ? min : 0,
++      max: count ? max : 0,
++      mean: count ? sum / count : 0,
++      sum,
++    };
++  });
++};
